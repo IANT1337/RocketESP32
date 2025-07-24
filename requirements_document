@@ -1,0 +1,26 @@
+Description:
+Rocketry flight computer software running on an ESP32 Feather V2 from Adafruit. 
+Reads GPS and Pressure data from sensors.
+Communicates with a ground station via serial radio. 
+Operates in three modes, flight mode, sleep mode, and maintenance mode.
+
+Level 1 Requirements:
+Shall be able to communicate with a GoouuuTech GT-U7 GPS module via serial.
+Shall be able to communicate with a MPRLS pressure sensor via I2C.
+Shall be able to communicate with a RFD900x radio modem via serial.
+Shall be able to set the RFD900x radio tx power level.
+Shall be able to control power to the sensors.
+
+Level 2 Requirements:
+<Modes; Requirement>
+<Flight, Maintenance; Shall power on the sensors>
+<Flight; Shall set radio to high power mode>
+<Flight, Maintenance; Shall read from the sensors>
+<Sleep; Shall power off the sensors>
+<Sleep; Shall power off the sensors>
+<Sleep, Maintenance; Shall set radio to low power mode>
+<Flight, Maintenance; Shall package and send data via radio to the ground station>
+<Sleep, Maintenance; Shall periodically listen to the radio for a command to enter flight mode>
+<Sleep, Flight; Shall periodically listen to the radio for a command to enter maintenance mode>
+<Maintenance, Flight; Shall periodically listen to the radio for a command to enter sleep mode>
+<Maintenance; Shall connect to a wifi network (ssid:XXXX,pswrd:XXXX) and broadcast data to a webserver>
