@@ -20,10 +20,12 @@
 #define I2C_FREQUENCY 100000
 
 // Timing settings (in milliseconds)
-#define SENSOR_READ_INTERVAL 1000
+#define SENSOR_READ_INTERVAL 100
+#define GPS_READ_INTERVAL 1000      // 1 second
 #define RADIO_LISTEN_INTERVAL 500
 #define HEARTBEAT_INTERVAL 5000
 #define MAINTENANCE_TIMEOUT 300000  // 5 minutes
+#define RSSI_QUERY_INTERVAL 10000   // 10 seconds
 
 // WiFi settings
 #define WIFI_SSID "XXXX"
@@ -53,6 +55,7 @@ struct TelemetryData {
   SystemMode mode;
   bool gps_valid;
   bool pressure_valid;
+  int16_t rssi;  // Radio signal strength in dBm
 };
 
 #endif

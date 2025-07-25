@@ -3,6 +3,7 @@
 SystemController::SystemController() : 
   currentMode(MODE_SLEEP),
   lastSensorRead(0),
+  lastGPSRead(0),
   lastRadioListen(0),
   lastHeartbeat(0),
   maintenanceModeStartTime(0) {
@@ -83,6 +84,9 @@ void SystemController::update() {
     Serial.print("System running in mode: ");
     Serial.println(currentMode);
     lastHeartbeat = currentTime;
+    updateSensors();
+    sendTelemetry();
+    lastSensorRead = currentTime;
   }
 }
 
@@ -106,9 +110,13 @@ void SystemController::handleModeTransition(SystemMode newMode) {
   // Handle power management transitions
   switch (newMode) {
     case MODE_FLIGHT:
-    case MODE_MAINTENANCE:
       powerManager->enableSensors();
       radioModule->setHighPower();
+      break;
+    case MODE_MAINTENANCE:
+      powerManager->enableSensors();
+      radioModule->setLowPower();
+      wifiManager->connect(WIFI_SSID, WIFI_PASSWORD);
       break;
     case MODE_SLEEP:
       powerManager->disableSensors();
@@ -117,10 +125,6 @@ void SystemController::handleModeTransition(SystemMode newMode) {
       break;
   }
   
-  // Handle WiFi for maintenance mode
-  if (newMode == MODE_MAINTENANCE) {
-    wifiManager->connect(WIFI_SSID, WIFI_PASSWORD);
-  }
 }
 
 void SystemController::handleFlightMode() {
@@ -158,18 +162,26 @@ void SystemController::handleSleepMode() {
 }
 
 void SystemController::updateSensors() {
-  // Read GPS data
-  telemetryData.gps_valid = gpsModule->readData(
-    telemetryData.latitude, 
-    telemetryData.longitude, 
-    telemetryData.altitude_gps
-  );
+  unsigned long currentTime = millis();
   
-  // Read pressure data
+  // Read GPS data only once per second
+  if (currentTime - lastGPSRead >= GPS_READ_INTERVAL) {
+    telemetryData.gps_valid = gpsModule->readData(
+      telemetryData.latitude, 
+      telemetryData.longitude, 
+      telemetryData.altitude_gps
+    );
+    lastGPSRead = currentTime;
+  }
+  
+  // Read pressure data every sensor read (faster rate)
   telemetryData.pressure_valid = pressureSensor->readData(
     telemetryData.pressure, 
     telemetryData.altitude_pressure
   );
+  
+  // Read radio RSSI
+  //telemetryData.rssi = radioModule->getRSSI();
   
   // Update timestamp and mode
   telemetryData.timestamp = millis();

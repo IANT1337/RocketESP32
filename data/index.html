@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rocket Flight Computer</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Rocket Flight Computer - Maintenance Mode</h1>
+        <button class="refresh-btn" onclick="refreshData()">Refresh Data</button>
+        
+        <div class="data-grid">
+            <div class="data-card">
+                <h3>System Status</h3>
+                <p>Last Update: <span id="timestamp" class="data-value">--</span></p>
+                <p>Mode: <span id="mode" class="data-value">--</span></p>
+            </div>
+            
+            <div class="data-card">
+                <h3>GPS Data</h3>
+                <p>Latitude: <span id="latitude" class="data-value">--</span></p>
+                <p>Longitude: <span id="longitude" class="data-value">--</span></p>
+                <p>Altitude: <span id="altitude_gps" class="data-value">--</span></p>
+                <p>Status: <span id="gps_status" class="data-value">--</span></p>
+            </div>
+            
+            <div class="data-card">
+                <h3>Pressure Data</h3>
+                <p>Pressure: <span id="pressure" class="data-value">--</span></p>
+                <p>Altitude: <span id="altitude_pressure" class="data-value">--</span></p>
+                <p>Status: <span id="pressure_status" class="data-value">--</span></p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/script.js"></script>
+</body>
+</html>

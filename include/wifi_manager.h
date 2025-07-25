@@ -5,6 +5,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include "config.h"
+#include "web_content.h"
 
 class WiFiManager {
 private:
@@ -12,10 +13,13 @@ private:
   bool initialized;
   bool connected;
   bool serverRunning;
+  TelemetryData latestData;
   
   void handleRoot();
   void handleTelemetry();
   void handleNotFound();
+  void handleStyle();
+  void handleScript();
   String createTelemetryJSON(const TelemetryData& data);
 
 public:

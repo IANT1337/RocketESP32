@@ -1,6 +1,6 @@
 #include "radio_module.h"
 
-RadioModule::RadioModule() : initialized(false), highPowerMode(false) {
+RadioModule::RadioModule() : initialized(false), highPowerMode(false), lastRSSIQuery(0), cachedRSSI(-999) {
   radioSerial = new HardwareSerial(2);
 }
 
@@ -23,11 +23,12 @@ void RadioModule::initialize() {
   }
   
   // Try to enter AT command mode with shorter timeout
-  sendATCommand("+++");
+  sendATCommand("+++", false); // Send without terminator
   delay(1100); // AT command mode requires > 1 second guard time
   
   // Test communication with shorter timeout
   sendATCommand("ATI");
+  delay(5);
   String response = readATResponse(1000); // Reduced from 2000ms
   
   if (response.indexOf("RFD900") >= 0 || response.indexOf("OK") >= 0) {
@@ -56,17 +57,26 @@ void RadioModule::setHighPower() {
   Serial.println("Setting radio to high power mode");
   
   // Enter AT command mode
-  sendATCommand("+++");
+  sendATCommand("+++", false); // Send without terminator
   delay(1000);
   
   // Set high power (30 dBm = 1W)
-  setParameter("S3", "30");
+  setParameter("S4", "30");
   
-  // Exit AT command mode
-  sendATCommand("ATO");
-  delay(500);
+  // Save settings to EEPROM
+  sendATCommand("AT&W");
+  String saveResponse = readATResponse(2000);
+  Serial.print("Save response: ");
+  Serial.println(saveResponse);
+  
+  // Reboot radio to apply settings
+  sendATCommand("ATZ");
+  delay(2000); // Wait for radio to reboot
+  
+  // Radio will automatically exit AT command mode after reboot
   
   highPowerMode = true;
+  Serial.println("Radio rebooted with high power settings");
 }
 
 void RadioModule::setLowPower() {
@@ -75,17 +85,26 @@ void RadioModule::setLowPower() {
   Serial.println("Setting radio to low power mode");
   
   // Enter AT command mode
-  sendATCommand("+++");
+  sendATCommand("+++", false); // Send without terminator
   delay(1000);
   
   // Set low power (20 dBm = 100mW)
-  setParameter("S3", "20");
+  setParameter("S4", "20");
   
-  // Exit AT command mode
-  sendATCommand("ATO");
-  delay(500);
+  // Save settings to EEPROM
+  sendATCommand("AT&W");
+  String saveResponse = readATResponse(2000);
+  Serial.print("Save response: ");
+  Serial.println(saveResponse);
+  
+  // Reboot radio to apply settings
+  sendATCommand("ATZ");
+  delay(2000); // Wait for radio to reboot
+  
+  // Radio will automatically exit AT command mode after reboot
   
   highPowerMode = false;
+  Serial.println("Radio rebooted with low power settings");
 }
 
 void RadioModule::sendTelemetry(const TelemetryData& data) {
@@ -101,7 +120,8 @@ void RadioModule::sendTelemetry(const TelemetryData& data) {
   packet += String(data.altitude_pressure, 2) + ",";
   packet += String(data.pressure, 2) + ",";
   packet += String(data.gps_valid ? 1 : 0) + ",";
-  packet += String(data.pressure_valid ? 1 : 0);
+  packet += String(data.pressure_valid ? 1 : 0) + ",";
+  packet += String(data.rssi);
   packet += "\n";
   
   radioSerial->print(packet);
@@ -131,13 +151,71 @@ String RadioModule::receiveCommand() {
   return "";
 }
 
+int16_t RadioModule::getRSSI() {
+  if (!initialized) return -999;
+  
+  // Check if we need to update RSSI (every 10 seconds)
+  unsigned long currentTime = millis();
+  if (currentTime - lastRSSIQuery < RSSI_QUERY_INTERVAL && cachedRSSI != -999) {
+    return cachedRSSI; // Return cached value
+  }
+  
+  // Enter AT command mode
+  sendATCommand("+++", false); // Send without terminator
+  delay(1000);
+  
+  // Get RSSI value (Remote RSSI - signal strength of last received packet)
+  sendATCommand("ATR");
+  String response = readATResponse(2000);
+  
+  // Exit AT command mode
+  sendATCommand("ATO");
+  delay(100);
+  
+  // Parse RSSI from response
+  int rssiValue = -999;
+  if (response.length() > 0) {
+    // Look for numeric value in response
+    int startIdx = 0;
+    for (int i = 0; i < response.length(); i++) {
+      if (isdigit(response[i]) || response[i] == '-') {
+        startIdx = i;
+        break;
+      }
+    }
+    
+    if (startIdx < response.length()) {
+      String rssiStr = "";
+      for (int i = startIdx; i < response.length(); i++) {
+        if (isdigit(response[i]) || response[i] == '-') {
+          rssiStr += response[i];
+        } else if (rssiStr.length() > 0) {
+          break;
+        }
+      }
+      
+      if (rssiStr.length() > 0) {
+        rssiValue = rssiStr.toInt();
+      }
+    }
+  }
+  
+  // Update cache
+  cachedRSSI = rssiValue;
+  lastRSSIQuery = currentTime;
+  
+  return rssiValue;
+}
+
 bool RadioModule::isValid() {
   return initialized;
 }
 
-void RadioModule::sendATCommand(String command) {
+void RadioModule::sendATCommand(String command, bool addTerminator) {
   radioSerial->print(command);
-  radioSerial->print("\r\n");
+  if (addTerminator) {
+    radioSerial->print("\r\n");
+  }
 }
 
 String RadioModule::readATResponse(unsigned long timeout) {

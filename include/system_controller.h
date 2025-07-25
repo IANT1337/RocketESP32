@@ -13,6 +13,7 @@ class SystemController {
 private:
   SystemMode currentMode;
   unsigned long lastSensorRead;
+  unsigned long lastGPSRead;
   unsigned long lastRadioListen;
   unsigned long lastHeartbeat;
   unsigned long maintenanceModeStartTime;

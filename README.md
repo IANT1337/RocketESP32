@@ -105,7 +105,7 @@ TELEM,timestamp,mode,latitude,longitude,altitude_gps,altitude_pressure,pressure,
 ### Maintenance Mode
 
 When in maintenance mode:
-1. System connects to WiFi network (SSID: GF7H5)
+1. System connects to WiFi network
 2. Web server starts on port 80
 3. Access via ESP32's IP address for real-time monitoring
 4. Automatic timeout after 5 minutes
