@@ -20,7 +20,7 @@
 #define I2C_FREQUENCY 100000
 
 // Timing settings (in milliseconds)
-#define SENSOR_READ_INTERVAL 100
+#define SENSOR_READ_INTERVAL 10
 #define GPS_READ_INTERVAL 1000      // 1 second
 #define RADIO_LISTEN_INTERVAL 500
 #define HEARTBEAT_INTERVAL 5000
