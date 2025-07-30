@@ -2,8 +2,6 @@
 
 A comprehensive flight computer software for ESP32 Feather V2 that interfaces with GPS, pressure sensors, IMU, power monitoring, and radio communication for advanced rocketry applications.
 
-<img width="345" height="970" alt="new" src="https://github.com/user-attachments/assets/1280123c-ef81-465a-9f24-02427c6436ea" />
-
 ## Features
 
 - **Three Operating Modes:**
