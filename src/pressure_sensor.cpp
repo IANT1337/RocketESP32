@@ -17,13 +17,32 @@ void PressureSensor::initialize() {
   // Wait for sensor to stabilize
   delay(100);
   
-  // Test communication
-  Wire.beginTransmission(MPRLS_I2C_ADDR);
-  if (Wire.endTransmission() == 0) {
-    initialized = true;
-    Serial.println("Pressure sensor initialized successfully");
-  } else {
-    Serial.println("Failed to initialize pressure sensor");
+  const int maxRetries = 3;
+  bool success = false;
+  
+  for (int attempt = 1; attempt <= maxRetries && !success; attempt++) {
+    Serial.print("Pressure sensor initialization attempt ");
+    Serial.print(attempt);
+    Serial.print(" of ");
+    Serial.println(maxRetries);
+    
+    // Test communication
+    Wire.beginTransmission(MPRLS_I2C_ADDR);
+    if (Wire.endTransmission() == 0) {
+      success = true;
+      initialized = true;
+      Serial.println("Pressure sensor initialized successfully");
+    } else {
+      Serial.println("Failed to communicate with pressure sensor");
+      if (attempt < maxRetries) {
+        Serial.println("Retrying in 500ms...");
+        delay(500);
+      }
+    }
+  }
+  
+  if (!success) {
+    Serial.println("Failed to initialize pressure sensor after all retries");
     initialized = false;
   }
 }

@@ -29,6 +29,8 @@ public:
   void initialize();
   bool connect(const char* ssid, const char* password);
   void disconnect();
+  void powerOff();
+  void powerOn();
   void broadcastData(const TelemetryData& data);
   void handleClient();
   bool isConnected() const { return connected; }

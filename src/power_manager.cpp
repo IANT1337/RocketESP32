@@ -14,7 +14,7 @@ void PowerManager::initialize() {
   
   // Configure power control pins as outputs
   pinMode(SENSOR_POWER_PIN, OUTPUT);
-  pinMode(RADIO_POWER_PIN, OUTPUT);
+  //pinMode(RADIO_POWER_PIN, OUTPUT);
   pinMode(STATUS_LED_PIN, OUTPUT);
   
   // Start with everything disabled to save power
@@ -56,7 +56,7 @@ void PowerManager::enableRadio() {
   
   if (!radioEnabled) {
     Serial.println("Enabling radio");
-    digitalWrite(RADIO_POWER_PIN, HIGH);
+    //digitalWrite(RADIO_POWER_PIN, HIGH);
     radioEnabled = true;
     
     // Wait for radio to stabilize (reduced delay)
@@ -69,7 +69,7 @@ void PowerManager::disableRadio() {
   
   if (radioEnabled) {
     Serial.println("Disabling radio");
-    digitalWrite(RADIO_POWER_PIN, LOW);
+    //digitalWrite(RADIO_POWER_PIN, LOW);
     radioEnabled = false;
   }
 }

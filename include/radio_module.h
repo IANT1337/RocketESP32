@@ -28,6 +28,7 @@ public:
   String receiveCommand();
   int16_t getRSSI();
   bool isValid();
+  void sendAcknowledgment(String message);    
 };
 
 #endif

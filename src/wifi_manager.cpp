@@ -1,5 +1,7 @@
 #include "wifi_manager.h"
 #include "web_content.h"
+#include "esp_wifi.h"
+#include "esp_sleep.h"
 
 WiFiManager::WiFiManager() : 
   webServer(nullptr),
@@ -7,7 +9,9 @@ WiFiManager::WiFiManager() :
   connected(false),
   serverRunning(false) {
   // Initialize with default telemetry data
-  latestData = {0.0, 0.0, 0.0, 0.0, 1013.25, 0, MODE_MAINTENANCE, false, false, -999};
+  latestData = {0.0, 0.0, 0.0, 0.0, 1013.25, 0, MODE_MAINTENANCE, false, false, -999,
+               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false,
+               0.0, 0.0, 0.0, false};
 }
 
 WiFiManager::~WiFiManager() {
@@ -89,8 +93,42 @@ void WiFiManager::disconnect() {
   }
 }
 
+void WiFiManager::powerOff() {
+  Serial.println("Turning off WiFi for power saving");
+  
+  // Disconnect first if connected
+  disconnect();
+  
+  // Turn off WiFi radio completely
+  WiFi.mode(WIFI_OFF);
+  
+  // Additional power saving - safely deinitialize WiFi if it was initialized
+  if (initialized) {
+    esp_err_t err = esp_wifi_stop();
+    if (err == ESP_OK) {
+      esp_wifi_deinit();
+    }
+  }
+  
+  // Configure power domain for maximum power savings
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);
+  
+  initialized = false;
+  Serial.println("WiFi powered off");
+}
+
+void WiFiManager::powerOn() {
+  Serial.println("Powering on WiFi");
+  
+  // Re-initialize WiFi
+  initialize();
+  
+  Serial.println("WiFi powered on and ready");
+}
+
 void WiFiManager::broadcastData(const TelemetryData& data) {
-  if (!connected || !serverRunning) return;
+  // Only handle data if WiFi is initialized and connected
+  if (!initialized || !connected || !serverRunning) return;
   
   // Store latest data for web requests
   latestData = data;
@@ -100,7 +138,8 @@ void WiFiManager::broadcastData(const TelemetryData& data) {
 }
 
 void WiFiManager::handleClient() {
-  if (webServer && serverRunning) {
+  // Only handle clients if WiFi is properly initialized and server is running
+  if (webServer && serverRunning && initialized) {
     webServer->handleClient();
   }
 }
@@ -138,6 +177,26 @@ String WiFiManager::createTelemetryJSON(const TelemetryData& data) {
   json += "\"pressure\":" + String(data.pressure, 2) + ",";
   json += "\"gps_valid\":" + String(data.gps_valid ? "true" : "false") + ",";
   json += "\"pressure_valid\":" + String(data.pressure_valid ? "true" : "false") + ",";
+  
+  // Add IMU data
+  json += "\"accel_x\":" + String(data.accel_x, 3) + ",";
+  json += "\"accel_y\":" + String(data.accel_y, 3) + ",";
+  json += "\"accel_z\":" + String(data.accel_z, 3) + ",";
+  json += "\"gyro_x\":" + String(data.gyro_x, 2) + ",";
+  json += "\"gyro_y\":" + String(data.gyro_y, 2) + ",";
+  json += "\"gyro_z\":" + String(data.gyro_z, 2) + ",";
+  json += "\"mag_x\":" + String(data.mag_x, 1) + ",";
+  json += "\"mag_y\":" + String(data.mag_y, 1) + ",";
+  json += "\"mag_z\":" + String(data.mag_z, 1) + ",";
+  json += "\"imu_temperature\":" + String(data.imu_temperature, 1) + ",";
+  json += "\"imu_valid\":" + String(data.imu_valid ? "true" : "false") + ",";
+  
+  // Add power sensor data
+  json += "\"bus_voltage\":" + String(data.bus_voltage, 3) + ",";
+  json += "\"current\":" + String(data.current, 2) + ",";
+  json += "\"power\":" + String(data.power, 2) + ",";
+  json += "\"power_valid\":" + String(data.power_valid ? "true" : "false") + ",";
+  
   json += "\"rssi\":" + String(data.rssi);
   json += "}";
   

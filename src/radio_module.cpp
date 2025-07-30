@@ -2,6 +2,7 @@
 
 RadioModule::RadioModule() : initialized(false), highPowerMode(false), lastRSSIQuery(0), cachedRSSI(-999) {
   radioSerial = new HardwareSerial(2);
+  void sendATCommand(String command, bool waitResponse);
 }
 
 RadioModule::~RadioModule() {
@@ -56,27 +57,57 @@ void RadioModule::setHighPower() {
   
   Serial.println("Setting radio to high power mode");
   
-  // Enter AT command mode
-  sendATCommand("+++", false); // Send without terminator
-  delay(1000);
+  const int maxRetries = 3;
+  bool success = false;
   
-  // Set high power (30 dBm = 1W)
-  setParameter("S4", "30");
+  for (int attempt = 1; attempt <= maxRetries && !success; attempt++) {
+    Serial.print("High power attempt ");
+    Serial.print(attempt);
+    Serial.print(" of ");
+    Serial.println(maxRetries);
+    
+    // Enter AT command mode
+    sendATCommand("+++", false); // Send without terminator
+    delay(1000);
+    
+    // Set high power (30 dBm = 1W)
+    if (setParameter("S4", "30")) {
+      // Save settings to EEPROM
+      sendATCommand("AT&W");
+      String saveResponse = readATResponse(2000);
+      Serial.print("Save response: ");
+      Serial.println(saveResponse);
+      
+      if (saveResponse.indexOf("OK") >= 0) {
+        // Reboot radio to apply settings
+        sendATCommand("ATZ");
+        delay(2000); // Wait for radio to reboot
+        
+        success = true;
+        highPowerMode = true;
+        Serial.println("Radio rebooted with high power settings");
+      } else {
+        Serial.println("Failed to save high power settings");
+        // Exit AT mode before retry
+        sendATCommand("ATO");
+        delay(100);
+      }
+    } else {
+      Serial.println("Failed to set high power parameter");
+      // Exit AT mode before retry
+      sendATCommand("ATO");
+      delay(100);
+    }
+    
+    if (!success && attempt < maxRetries) {
+      Serial.println("Retrying in 500ms...");
+      delay(500);
+    }
+  }
   
-  // Save settings to EEPROM
-  sendATCommand("AT&W");
-  String saveResponse = readATResponse(2000);
-  Serial.print("Save response: ");
-  Serial.println(saveResponse);
-  
-  // Reboot radio to apply settings
-  sendATCommand("ATZ");
-  delay(2000); // Wait for radio to reboot
-  
-  // Radio will automatically exit AT command mode after reboot
-  
-  highPowerMode = true;
-  Serial.println("Radio rebooted with high power settings");
+  if (!success) {
+    Serial.println("Failed to set high power mode after all retries");
+  }
 }
 
 void RadioModule::setLowPower() {
@@ -84,33 +115,63 @@ void RadioModule::setLowPower() {
   
   Serial.println("Setting radio to low power mode");
   
-  // Enter AT command mode
-  sendATCommand("+++", false); // Send without terminator
-  delay(1000);
+  const int maxRetries = 3;
+  bool success = false;
   
-  // Set low power (20 dBm = 100mW)
-  setParameter("S4", "20");
+  for (int attempt = 1; attempt <= maxRetries && !success; attempt++) {
+    Serial.print("Low power attempt ");
+    Serial.print(attempt);
+    Serial.print(" of ");
+    Serial.println(maxRetries);
+    
+    // Enter AT command mode
+    sendATCommand("+++", false); // Send without terminator
+    delay(1000);
+    
+    // Set low power (20 dBm = 100mW)
+    if (setParameter("S4", "20")) {
+      // Save settings to EEPROM
+      sendATCommand("AT&W");
+      String saveResponse = readATResponse(2000);
+      Serial.print("Save response: ");
+      Serial.println(saveResponse);
+      
+      if (saveResponse.indexOf("OK") >= 0) {
+        // Reboot radio to apply settings
+        sendATCommand("ATZ");
+        delay(2000); // Wait for radio to reboot
+        
+        success = true;
+        highPowerMode = false;
+        Serial.println("Radio rebooted with low power settings");
+      } else {
+        Serial.println("Failed to save low power settings");
+        // Exit AT mode before retry
+        sendATCommand("ATO");
+        delay(100);
+      }
+    } else {
+      Serial.println("Failed to set low power parameter");
+      // Exit AT mode before retry
+      sendATCommand("ATO");
+      delay(100);
+    }
+    
+    if (!success && attempt < maxRetries) {
+      Serial.println("Retrying in 500ms...");
+      delay(500);
+    }
+  }
   
-  // Save settings to EEPROM
-  sendATCommand("AT&W");
-  String saveResponse = readATResponse(2000);
-  Serial.print("Save response: ");
-  Serial.println(saveResponse);
-  
-  // Reboot radio to apply settings
-  sendATCommand("ATZ");
-  delay(2000); // Wait for radio to reboot
-  
-  // Radio will automatically exit AT command mode after reboot
-  
-  highPowerMode = false;
-  Serial.println("Radio rebooted with low power settings");
+  if (!success) {
+    Serial.println("Failed to set low power mode after all retries");
+  }
 }
 
 void RadioModule::sendTelemetry(const TelemetryData& data) {
   if (!initialized) return;
   
-  // Create telemetry packet
+  // Create telemetry packet with all data including IMU
   String packet = "TELEM,";
   packet += String(data.timestamp) + ",";
   packet += String(data.mode) + ",";
@@ -121,14 +182,36 @@ void RadioModule::sendTelemetry(const TelemetryData& data) {
   packet += String(data.pressure, 2) + ",";
   packet += String(data.gps_valid ? 1 : 0) + ",";
   packet += String(data.pressure_valid ? 1 : 0) + ",";
+  
+  // Add IMU data
+  packet += String(data.accel_x, 3) + ",";
+  packet += String(data.accel_y, 3) + ",";
+  packet += String(data.accel_z, 3) + ",";
+  packet += String(data.gyro_x, 2) + ",";
+  packet += String(data.gyro_y, 2) + ",";
+  packet += String(data.gyro_z, 2) + ",";
+  packet += String(data.mag_x, 1) + ",";
+  packet += String(data.mag_y, 1) + ",";
+  packet += String(data.mag_z, 1) + ",";
+  packet += String(data.imu_temperature, 1) + ",";
+  packet += String(data.imu_valid ? 1 : 0) + ",";
+  
+  // Add power data
+  packet += String(data.bus_voltage, 3) + ",";
+  packet += String(data.current, 2) + ",";
+  packet += String(data.power, 2) + ",";
+  packet += String(data.power_valid ? 1 : 0) + ",";
+  
+  // Add RSSI at the end
   packet += String(data.rssi);
   packet += "\n";
   
   radioSerial->print(packet);
   
   // Debug output
-  Serial.print("Sent telemetry: ");
-  Serial.print(packet);
+  //Serial.print("Sent telemetry: ");
+  //Serial.print(packet);
+  //Serial.print(packet);
 }
 
 String RadioModule::receiveCommand() {
@@ -162,7 +245,7 @@ int16_t RadioModule::getRSSI() {
   
   // Enter AT command mode
   sendATCommand("+++", false); // Send without terminator
-  delay(1000);
+  delay(500);
   
   // Get RSSI value (Remote RSSI - signal strength of last received packet)
   sendATCommand("ATR");
@@ -217,7 +300,10 @@ void RadioModule::sendATCommand(String command, bool addTerminator) {
     radioSerial->print("\r\n");
   }
 }
-
+// In RadioModule implementation
+void RadioModule::sendAcknowledgment(String message) {
+    sendATCommand(message);
+}
 String RadioModule::readATResponse(unsigned long timeout) {
   String response = "";
   unsigned long startTime = millis();

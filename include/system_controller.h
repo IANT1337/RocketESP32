@@ -5,6 +5,8 @@
 #include "config.h"
 #include "gps_module.h"
 #include "pressure_sensor.h"
+#include "mpu9250_sensor.h"
+#include "ina260_sensor.h"
 #include "radio_module.h"
 #include "power_manager.h"
 #include "wifi_manager.h"
@@ -20,6 +22,8 @@ private:
   
   GPSModule* gpsModule;
   PressureSensor* pressureSensor;
+  MPU9250Sensor* imuSensor;
+  INA260Sensor* powerSensor;
   RadioModule* radioModule;
   PowerManager* powerManager;
   WiFiManager* wifiManager;

@@ -11,19 +11,64 @@ GPSModule::~GPSModule() {
 void GPSModule::initialize() {
   Serial.println("Initializing GPS module...");
   
-  // Initialize GPS serial communication
-  gpsSerial->begin(GPS_BAUD_RATE, SERIAL_8N1, GPS_SERIAL_RX_PIN, GPS_SERIAL_TX_PIN);
+  const int maxRetries = 3;
+  bool success = false;
   
-  // Brief delay for serial to stabilize, but not too long to cause watchdog
-  delay(100);
-  
-  // Clear any existing data in the buffer
-  while (gpsSerial->available()) {
-    gpsSerial->read();
+  for (int attempt = 1; attempt <= maxRetries && !success; attempt++) {
+    Serial.print("GPS module initialization attempt ");
+    Serial.print(attempt);
+    Serial.print(" of ");
+    Serial.println(maxRetries);
+    
+    // Initialize GPS serial communication
+    gpsSerial->begin(GPS_BAUD_RATE, SERIAL_8N1, GPS_SERIAL_RX_PIN, GPS_SERIAL_TX_PIN);
+    
+    // Brief delay for serial to stabilize, but not too long to cause watchdog
+    delay(100);
+    
+    // Clear any existing data in the buffer
+    while (gpsSerial->available()) {
+      gpsSerial->read();
+    }
+    
+    // Test GPS communication by looking for NMEA data
+    bool foundNMEA = false;
+    unsigned long startTime = millis();
+    
+    // Wait up to 2 seconds for NMEA data
+    while (millis() - startTime < 2000 && !foundNMEA) {
+      if (gpsSerial->available()) {
+        String nmea = gpsSerial->readStringUntil('\n');
+        nmea.trim();
+        
+        // Look for any valid NMEA sentence
+        if (nmea.startsWith("$GP") || nmea.startsWith("$GN") || nmea.startsWith("$GL")) {
+          foundNMEA = true;
+          success = true;
+          Serial.println("GPS module responding with NMEA data");
+        }
+      }
+      delay(10); // Small delay to prevent overwhelming the GPS
+    }
+    
+    if (!success) {
+      Serial.println("No NMEA data received from GPS");
+      if (attempt < maxRetries) {
+        Serial.println("Retrying in 1000ms...");
+        delay(1000); // Longer delay for GPS as it may need time to acquire satellites
+      }
+    }
   }
   
-  initialized = true;
-  Serial.println("GPS module initialized");
+  if (success) {
+    initialized = true;
+    Serial.println("GPS module initialized successfully");
+  } else {
+    // Mark as initialized anyway to prevent system lockup
+    // GPS may work later when it gets satellite lock
+    initialized = true; 
+    Serial.println("GPS module initialized (no immediate NMEA data, but continuing)");
+  }
 }
 
 bool GPSModule::readData(float& latitude, float& longitude, float& altitude) {

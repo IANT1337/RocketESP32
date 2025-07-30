@@ -11,6 +11,8 @@ SystemController::SystemController() :
   // Initialize module pointers
   gpsModule = new GPSModule();
   pressureSensor = new PressureSensor();
+  imuSensor = new MPU9250Sensor();
+  powerSensor = new INA260Sensor();
   radioModule = new RadioModule();
   powerManager = new PowerManager();
   wifiManager = new WiFiManager();
@@ -22,6 +24,8 @@ SystemController::SystemController() :
 SystemController::~SystemController() {
   delete gpsModule;
   delete pressureSensor;
+  delete imuSensor;
+  delete powerSensor;
   delete radioModule;
   delete powerManager;
   delete wifiManager;
@@ -40,17 +44,9 @@ void SystemController::initialize() {
   yield(); // Feed watchdog
   delay(100); // Small delay
   
-  gpsModule->initialize();
-  yield(); // Feed watchdog
-  delay(100); // Small delay
-  
-  pressureSensor->initialize();
-  yield(); // Feed watchdog
-  delay(100); // Small delay
-  
   wifiManager->initialize();
   yield(); // Feed watchdog
-  
+  powerSensor->initialize();
   // Start in sleep mode
   setMode(MODE_SLEEP);
   
@@ -111,17 +107,46 @@ void SystemController::handleModeTransition(SystemMode newMode) {
   switch (newMode) {
     case MODE_FLIGHT:
       powerManager->enableSensors();
+      gpsModule->initialize();
+      yield(); // Feed watchdog
+      delay(250); // Small delay
+      pressureSensor->initialize();
+      yield(); // Feed watchdog
+      delay(250); // Small delay
+      imuSensor->initialize();
+      yield(); // Feed watchdog
+      delay(250); // Small delay
+      powerSensor->initialize();
+      yield(); // Feed watchdog
+      delay(250); // Small delay
       radioModule->setHighPower();
+      wifiManager->powerOff(); // Turn off WiFi during flight for power saving
       break;
     case MODE_MAINTENANCE:
       powerManager->enableSensors();
+      gpsModule->initialize();
+      yield(); // Feed watchdog
+      delay(250); // Small delay
+      pressureSensor->initialize();
+      yield(); // Feed watchdog
+      delay(250); // Small delay
+      imuSensor->initialize();
+      yield(); // Feed watchdog
+      delay(250); // Small delay
+      powerSensor->initialize();
+      yield(); // Feed watchdog
+      delay(250); // Small delay
       radioModule->setLowPower();
+      wifiManager->powerOn(); // Turn on WiFi for maintenance
       wifiManager->connect(WIFI_SSID, WIFI_PASSWORD);
       break;
     case MODE_SLEEP:
       powerManager->disableSensors();
+      powerSensor->initialize();
+      yield(); // Feed watchdog
+      delay(250); // Small delay
       radioModule->setLowPower();
-      wifiManager->disconnect();
+      wifiManager->powerOff(); // Completely turn off WiFi to save power
       break;
   }
   
@@ -145,7 +170,10 @@ void SystemController::handleMaintenanceMode() {
   if (currentTime - lastSensorRead >= SENSOR_READ_INTERVAL) {
     updateSensors();
     sendTelemetry();
-    wifiManager->broadcastData(telemetryData);
+    // Only broadcast to WiFi if we're in maintenance mode (WiFi is on)
+    if (currentMode == MODE_MAINTENANCE && wifiManager->isValid()) {
+      wifiManager->broadcastData(telemetryData);
+    }
     lastSensorRead = currentTime;
   }
   
@@ -180,6 +208,44 @@ void SystemController::updateSensors() {
     telemetryData.altitude_pressure
   );
   
+  // Read IMU data every sensor read (faster rate)
+  IMUData imuData;
+  if (imuSensor->readData(imuData)) {
+    telemetryData.accel_x = imuData.accel_x;
+    telemetryData.accel_y = imuData.accel_y;
+    telemetryData.accel_z = imuData.accel_z;
+    telemetryData.gyro_x = imuData.gyro_x;
+    telemetryData.gyro_y = imuData.gyro_y;
+    telemetryData.gyro_z = imuData.gyro_z;
+    telemetryData.mag_x = imuData.mag_x;
+    telemetryData.mag_y = imuData.mag_y;
+    telemetryData.mag_z = imuData.mag_z;
+    telemetryData.imu_temperature = imuData.temperature;
+    telemetryData.imu_valid = imuData.valid;
+  } else {
+    // Clear IMU data if read failed
+    telemetryData.accel_x = telemetryData.accel_y = telemetryData.accel_z = 0.0f;
+    telemetryData.gyro_x = telemetryData.gyro_y = telemetryData.gyro_z = 0.0f;
+    telemetryData.mag_x = telemetryData.mag_y = telemetryData.mag_z = 0.0f;
+    telemetryData.imu_temperature = 0.0f;
+    telemetryData.imu_valid = false;
+  }
+  
+  // Read power data every sensor read (faster rate)
+  PowerData powerData;
+  if (powerSensor->readData(powerData)) {
+    telemetryData.bus_voltage = powerData.voltage;
+    telemetryData.current = powerData.current;
+    telemetryData.power = powerData.power;
+    telemetryData.power_valid = powerData.valid;
+  } else {
+    // Clear power data if read failed
+    telemetryData.bus_voltage = 0.0f;
+    telemetryData.current = 0.0f;
+    telemetryData.power = 0.0f;
+    telemetryData.power_valid = false;
+  }
+  
   // Read radio RSSI
   //telemetryData.rssi = radioModule->getRSSI();
   
@@ -194,7 +260,7 @@ void SystemController::checkRadioCommands() {
   if (command.length() > 0) {
     Serial.print("Received command: ");
     Serial.println(command);
-    
+    radioModule->sendAcknowledgment("Received command: " + command);
     if (command == CMD_FLIGHT_MODE) {
       setMode(MODE_FLIGHT);
     } else if (command == CMD_SLEEP_MODE) {
