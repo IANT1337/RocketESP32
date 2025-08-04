@@ -65,14 +65,16 @@ void RadioModule::setHighPower() {
     Serial.print(attempt);
     Serial.print(" of ");
     Serial.println(maxRetries);
-    
+    delay(1000);
     // Enter AT command mode
     sendATCommand("+++", false); // Send without terminator
     delay(1000);
-    
+    sendATCommand("AT");
+    delay(100);
     // Set high power (30 dBm = 1W)
-    if (setParameter("S4", "30")) {
+    if (setParameter("S12", "30")) {
       // Save settings to EEPROM
+      delay(100);
       sendATCommand("AT&W");
       String saveResponse = readATResponse(2000);
       Serial.print("Save response: ");
@@ -123,14 +125,16 @@ void RadioModule::setLowPower() {
     Serial.print(attempt);
     Serial.print(" of ");
     Serial.println(maxRetries);
-    
+    delay(1000);
     // Enter AT command mode
     sendATCommand("+++", false); // Send without terminator
     delay(1000);
-    
+    sendATCommand("AT");
+    delay(100);
     // Set low power (20 dBm = 100mW)
-    if (setParameter("S4", "20")) {
+    if (setParameter("S12", "20")) {
       // Save settings to EEPROM
+      delay(100);
       sendATCommand("AT&W");
       String saveResponse = readATResponse(2000);
       Serial.print("Save response: ");

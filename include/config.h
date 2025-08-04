@@ -14,7 +14,7 @@
 
 // Serial communication settings
 #define GPS_BAUD_RATE 9600
-#define RADIO_BAUD_RATE 57600
+#define RADIO_BAUD_RATE 115200
 
 // I2C settings
 #define I2C_FREQUENCY 100000

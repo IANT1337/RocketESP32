@@ -9,11 +9,7 @@ INA260Sensor::~INA260Sensor() {
 void INA260Sensor::initialize() {
   Serial.println("Initializing INA260 power sensor...");
   
-  // Initialize I2C if not already done (shared with pressure and IMU sensors)
-  Wire.begin(PRESSURE_SDA_PIN, PRESSURE_SCL_PIN);
-  Wire.setClock(I2C_FREQUENCY);
-  
-  delay(100); // Allow sensor to stabilize
+
   
   const int maxRetries = 3;
   bool success = false;
@@ -24,6 +20,12 @@ void INA260Sensor::initialize() {
     Serial.print(" of ");
     Serial.println(maxRetries);
     
+    // Initialize I2C if not already done (shared with pressure and IMU sensors)
+    Wire.begin(PRESSURE_SDA_PIN, PRESSURE_SCL_PIN);
+    Wire.setClock(I2C_FREQUENCY);
+  
+    delay(100); // Allow sensor to stabilize
+
     // Check if INA260 is present by reading manufacturer ID
     uint16_t mfgId;
     if (!readRegister(INA260_MFG_UID, mfgId)) {
