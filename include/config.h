@@ -13,7 +13,7 @@
 #define STATUS_LED_PIN 13
 
 // Serial communication settings
-#define GPS_BAUD_RATE 9600
+#define GPS_BAUD_RATE 9600  // Matek M10Q-5883 default baud rate (can support up to 460800)
 #define RADIO_BAUD_RATE 115200
 
 // I2C settings
