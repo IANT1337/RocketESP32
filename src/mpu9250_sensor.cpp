@@ -149,28 +149,57 @@ bool MPU9250Sensor::readData(IMUData& data) {
     return false;
   }
   
-  bool success = true;
+  // Optimize: Read all sensor data in one bulk transaction
+  // This reduces I2C overhead from multiple separate reads
+  uint8_t sensorBuffer[20]; // Buffer for accel(6) + temp(2) + gyro(6) + extra
   
-  // Read accelerometer data
-  if (!readAccelerometer(data.accel_x, data.accel_y, data.accel_z)) {
-    success = false;
+  // Read accelerometer, temperature, and gyroscope data in one transaction
+  // MPU9250 registers are sequential: ACCEL_XOUT_H(0x3B) to GYRO_ZOUT_L(0x48)
+  bool success = readRegisters(MPU9250_I2C_ADDR, MPU9250_ACCEL_XOUT_H, sensorBuffer, 14);
+  
+  if (success) {
+    // Parse accelerometer data (bytes 0-5)
+    int16_t raw_accel_x = (sensorBuffer[0] << 8) | sensorBuffer[1];
+    int16_t raw_accel_y = (sensorBuffer[2] << 8) | sensorBuffer[3];
+    int16_t raw_accel_z = (sensorBuffer[4] << 8) | sensorBuffer[5];
+    
+    data.accel_x = raw_accel_x / ACCEL_SCALE_2G;
+    data.accel_y = raw_accel_y / ACCEL_SCALE_2G;
+    data.accel_z = raw_accel_z / ACCEL_SCALE_2G;
+    
+    // Parse temperature data (bytes 6-7)
+    int16_t raw_temp = (sensorBuffer[6] << 8) | sensorBuffer[7];
+    data.temperature = (raw_temp / 333.87f) + 21.0f;
+    
+    // Parse gyroscope data (bytes 8-13)
+    int16_t raw_gyro_x = (sensorBuffer[8] << 8) | sensorBuffer[9];
+    int16_t raw_gyro_y = (sensorBuffer[10] << 8) | sensorBuffer[11];
+    int16_t raw_gyro_z = (sensorBuffer[12] << 8) | sensorBuffer[13];
+    
+    data.gyro_x = raw_gyro_x / GYRO_SCALE_250DPS;
+    data.gyro_y = raw_gyro_y / GYRO_SCALE_250DPS;
+    data.gyro_z = raw_gyro_z / GYRO_SCALE_250DPS;
+  } else {
+    // Set default values on failure
+    data.accel_x = data.accel_y = data.accel_z = 0.0f;
+    data.gyro_x = data.gyro_y = data.gyro_z = 0.0f;
+    data.temperature = 0.0f;
   }
   
-  // Read gyroscope data
-  if (!readGyroscope(data.gyro_x, data.gyro_y, data.gyro_z)) {
-    success = false;
-  }
-  
-  // Read temperature
-  if (!readTemperature(data.temperature)) {
-    success = false;
-  }
-  
-  // Read magnetometer data (if available)
+  // Read magnetometer data separately (different I2C address)
   if (magnetometerInitialized) {
-    if (!readMagnetometer(data.mag_x, data.mag_y, data.mag_z)) {
-      // Don't fail entirely if magnetometer fails
+    uint8_t magBuffer[6];
+    if (readRegisters(AK8963_I2C_ADDR, AK8963_XOUT_L, magBuffer, 6)) {
+      int16_t raw_mag_x = (magBuffer[1] << 8) | magBuffer[0]; // Note: LSB first for magnetometer
+      int16_t raw_mag_y = (magBuffer[3] << 8) | magBuffer[2];
+      int16_t raw_mag_z = (magBuffer[5] << 8) | magBuffer[4];
+      
+      data.mag_x = raw_mag_x * MAG_SCALE;
+      data.mag_y = raw_mag_y * MAG_SCALE;
+      data.mag_z = raw_mag_z * MAG_SCALE;
+    } else {
       data.mag_x = data.mag_y = data.mag_z = 0.0f;
+      success = false;
     }
   } else {
     data.mag_x = data.mag_y = data.mag_z = 0.0f;
@@ -283,12 +312,25 @@ bool MPU9250Sensor::readRegisters(uint8_t address, uint8_t reg, uint8_t* buffer,
     return false;
   }
   
+  // Add timeout handling to prevent blocking
+  unsigned long startTime = millis();
   Wire.requestFrom(address, count);
+  
+  // Wait for data with timeout (max 5ms)
+  while (Wire.available() < count && (millis() - startTime < 5)) {
+    yield(); // Feed watchdog while waiting
+  }
+  
   if (Wire.available() >= count) {
     for (uint8_t i = 0; i < count; i++) {
       buffer[i] = Wire.read();
     }
     return true;
+  }
+  
+  // Timeout or insufficient data - clear buffer
+  while (Wire.available()) {
+    Wire.read(); // Clear any partial data
   }
   
   return false;

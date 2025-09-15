@@ -17,6 +17,19 @@ function refreshData() {
             // Update UI to show error state
             document.getElementById('timestamp').textContent = 'Connection Error';
         });
+    
+    // Fetch SD card status
+    fetch('/sdstatus')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('sd_available').textContent = data.available ? 'Yes' : 'No';
+            document.getElementById('sd_status').textContent = data.status;
+        })
+        .catch(error => {
+            console.error('SD Status Error:', error);
+            document.getElementById('sd_available').textContent = 'Error';
+            document.getElementById('sd_status').textContent = 'Unable to fetch status';
+        });
 }
 
 function getModeString(mode) {

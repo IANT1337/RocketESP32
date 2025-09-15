@@ -13,7 +13,7 @@ void PowerManager::initialize() {
   Serial.println("Initializing power manager...");
   
   // Configure power control pins as outputs
-  pinMode(SENSOR_POWER_PIN, OUTPUT);
+  //pinMode(SENSOR_POWER_PIN, OUTPUT);
   //pinMode(RADIO_POWER_PIN, OUTPUT);
   pinMode(STATUS_LED_PIN, OUTPUT);
   
@@ -33,11 +33,11 @@ void PowerManager::enableSensors() {
   
   if (!sensorsEnabled) {
     Serial.println("Enabling sensors");
-    digitalWrite(SENSOR_POWER_PIN, HIGH);
+    //digitalWrite(SENSOR_POWER_PIN, HIGH);
     sensorsEnabled = true;
     
     // Wait for sensors to stabilize (reduced delay)
-    delay(200);
+    //delay(200);
   }
 }
 
@@ -46,7 +46,7 @@ void PowerManager::disableSensors() {
   
   if (sensorsEnabled) {
     Serial.println("Disabling sensors");
-    digitalWrite(SENSOR_POWER_PIN, LOW);
+    //digitalWrite(SENSOR_POWER_PIN, LOW);
     sensorsEnabled = false;
   }
 }

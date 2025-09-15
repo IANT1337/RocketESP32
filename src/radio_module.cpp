@@ -72,7 +72,7 @@ void RadioModule::setHighPower() {
     sendATCommand("AT");
     delay(100);
     // Set high power (30 dBm = 1W)
-    if (setParameter("S12", "30")) {
+    if (setParameter("S30", "30")) {
       // Save settings to EEPROM
       delay(100);
       sendATCommand("AT&W");
@@ -132,7 +132,7 @@ void RadioModule::setLowPower() {
     sendATCommand("AT");
     delay(100);
     // Set low power (20 dBm = 100mW)
-    if (setParameter("S12", "20")) {
+    if (setParameter("S30", "20")) {
       // Save settings to EEPROM
       delay(100);
       sendATCommand("AT&W");
@@ -175,47 +175,30 @@ void RadioModule::setLowPower() {
 void RadioModule::sendTelemetry(const TelemetryData& data) {
   if (!initialized) return;
   
-  // Create telemetry packet with all data including IMU
-  String packet = "TELEM,";
-  packet += String(data.timestamp) + ",";
-  packet += String(data.mode) + ",";
-  packet += String(data.latitude, 6) + ",";
-  packet += String(data.longitude, 6) + ",";
-  packet += String(data.altitude_gps, 2) + ",";
-  packet += String(data.altitude_pressure, 2) + ",";
-  packet += String(data.pressure, 2) + ",";
-  packet += String(data.gps_valid ? 1 : 0) + ",";
-  packet += String(data.pressure_valid ? 1 : 0) + ",";
+  // Use pre-allocated buffer with sprintf for much faster performance
+  // This replaces 30+ string concatenations with a single sprintf call
+  static char packet[512]; // Pre-allocated buffer
   
-  // Add IMU data
-  packet += String(data.accel_x, 3) + ",";
-  packet += String(data.accel_y, 3) + ",";
-  packet += String(data.accel_z, 3) + ",";
-  packet += String(data.gyro_x, 2) + ",";
-  packet += String(data.gyro_y, 2) + ",";
-  packet += String(data.gyro_z, 2) + ",";
-  packet += String(data.mag_x, 1) + ",";
-  packet += String(data.mag_y, 1) + ",";
-  packet += String(data.mag_z, 1) + ",";
-  packet += String(data.imu_temperature, 1) + ",";
-  packet += String(data.imu_valid ? 1 : 0) + ",";
-  
-  // Add power data
-  packet += String(data.bus_voltage, 3) + ",";
-  packet += String(data.current, 2) + ",";
-  packet += String(data.power, 2) + ",";
-  packet += String(data.power_valid ? 1 : 0) + ",";
-  
-  // Add RSSI at the end
-  packet += String(data.rssi);
-  packet += "\n";
+  snprintf(packet, sizeof(packet),
+    "TELEM,%lu,%d,%.6f,%.6f,%.2f,%.2f,%.2f,%d,%d,"
+    "%.3f,%.3f,%.3f,%.2f,%.2f,%.2f,%.1f,%.1f,%.1f,%.1f,%d,"
+    "%.3f,%.2f,%.2f,%d,%d\n",
+    data.timestamp, data.mode, 
+    data.latitude, data.longitude, data.altitude_gps, data.altitude_pressure, data.pressure,
+    data.gps_valid ? 1 : 0, data.pressure_valid ? 1 : 0,
+    data.accel_x, data.accel_y, data.accel_z,
+    data.gyro_x, data.gyro_y, data.gyro_z,
+    data.mag_x, data.mag_y, data.mag_z, data.imu_temperature,
+    data.imu_valid ? 1 : 0,
+    data.bus_voltage, data.current, data.power,
+    data.power_valid ? 1 : 0, data.rssi
+  );
   
   radioSerial->print(packet);
   
-  // Debug output
-  //Serial.print("Sent telemetry: ");
-  //Serial.print(packet);
-  //Serial.print(packet);
+  // Debug output (commented for performance)
+  // Serial.print("Sent telemetry: ");
+  // Serial.print(packet);
 }
 
 String RadioModule::receiveCommand() {

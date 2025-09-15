@@ -1,5 +1,6 @@
 #include "wifi_manager.h"
 #include "web_content.h"
+#include "system_controller.h"
 #include "esp_wifi.h"
 #include "esp_sleep.h"
 
@@ -7,7 +8,8 @@ WiFiManager::WiFiManager() :
   webServer(nullptr),
   initialized(false),
   connected(false),
-  serverRunning(false) {
+  serverRunning(false),
+  systemController(nullptr) {
   // Initialize with default telemetry data
   latestData = {0.0, 0.0, 0.0, 0.0, 1013.25, 0, MODE_MAINTENANCE, false, false, -999,
                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false,
@@ -60,6 +62,7 @@ bool WiFiManager::connect(const char* ssid, const char* password) {
     // Setup routes
     webServer->on("/", [this]() { handleRoot(); });
     webServer->on("/telemetry", [this]() { handleTelemetry(); });
+    webServer->on("/sdstatus", [this]() { handleSDStatus(); });
     webServer->on("/style.css", [this]() { handleStyle(); });
     webServer->on("/script.js", [this]() { handleScript(); });
     webServer->onNotFound([this]() { handleNotFound(); });
@@ -102,8 +105,9 @@ void WiFiManager::powerOff() {
   // Turn off WiFi radio completely
   WiFi.mode(WIFI_OFF);
   
-  // Additional power saving - safely deinitialize WiFi if it was initialized
+  // Additional power saving for ESP32-S3 / Arduino Nano ESP32
   if (initialized) {
+    // Safely stop and deinitialize WiFi
     esp_err_t err = esp_wifi_stop();
     if (err == ESP_OK) {
       esp_wifi_deinit();
@@ -111,6 +115,7 @@ void WiFiManager::powerOff() {
   }
   
   // Configure power domain for maximum power savings
+  // Note: ESP32-S3 power management may differ slightly
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);
   
   initialized = false;
@@ -151,6 +156,21 @@ void WiFiManager::handleRoot() {
 void WiFiManager::handleTelemetry() {
   // Return the latest telemetry data
   String json = createTelemetryJSON(latestData);
+  webServer->send(200, "application/json", json);
+}
+
+void WiFiManager::handleSDStatus() {
+  String json = "{";
+  
+  if (systemController) {
+    json += "\"available\":" + String(systemController->isSDCardAvailable() ? "true" : "false") + ",";
+    json += "\"status\":\"" + systemController->getSDCardStatus() + "\"";
+  } else {
+    json += "\"available\":false,";
+    json += "\"status\":\"System controller not available\"";
+  }
+  
+  json += "}";
   webServer->send(200, "application/json", json);
 }
 

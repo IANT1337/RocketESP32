@@ -193,7 +193,7 @@ bool INA260Sensor::readRegister(uint8_t reg, uint16_t& value) {
     return false;
   }
   
-  Wire.requestFrom(INA260_I2C_ADDR, (uint8_t)2);
+  Wire.requestFrom((uint8_t)INA260_I2C_ADDR, (uint8_t)2);
   if (Wire.available() >= 2) {
     uint8_t msb = Wire.read();
     uint8_t lsb = Wire.read();

@@ -17,6 +17,7 @@ void setup() {
   Serial.println("Rocket Flight Computer Starting...");
   
   // Configure watchdog timer for 30 seconds
+  // ESP32-S3 compatible watchdog initialization
   esp_task_wdt_init(30, true);
   esp_task_wdt_add(NULL);
   

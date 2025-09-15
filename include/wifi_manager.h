@@ -7,6 +7,9 @@
 #include "config.h"
 #include "web_content.h"
 
+// Forward declaration to avoid circular dependency
+class SystemController;
+
 class WiFiManager {
 private:
   WebServer* webServer;
@@ -14,9 +17,11 @@ private:
   bool connected;
   bool serverRunning;
   TelemetryData latestData;
+  SystemController* systemController;  // Reference to system controller for SD card status
   
   void handleRoot();
   void handleTelemetry();
+  void handleSDStatus();
   void handleNotFound();
   void handleStyle();
   void handleScript();
@@ -35,6 +40,7 @@ public:
   void handleClient();
   bool isConnected() const { return connected; }
   bool isValid() const { return initialized; }
+  void setSystemController(SystemController* controller) { systemController = controller; }
 };
 
 #endif
