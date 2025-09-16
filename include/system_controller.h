@@ -5,6 +5,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
+#include <Preferences.h>
 #include "config.h"
 #include "gps_module.h"
 #include "pressure_sensor.h"
@@ -37,6 +38,9 @@ private:
   SDManager sdManager;
   
   TelemetryData telemetryData;
+  
+  // Mode persistence
+  Preferences preferences;
   
   // Threading support
   TaskHandle_t backgroundTaskHandle;
@@ -86,6 +90,10 @@ private:
   void handleMaintenanceMode();
   void handleFlightMode();
   void handleSleepMode();
+  
+  // Mode persistence functions
+  void savePersistentMode(SystemMode mode);
+  SystemMode loadPersistentMode();
   
   // Performance monitoring
   void updatePerformanceMetrics(unsigned long duration, unsigned long* metric, unsigned long* maxMetric);

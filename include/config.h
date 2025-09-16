@@ -75,6 +75,10 @@
 #define CMD_MAINTENANCE_MODE "MAINT"
 #define CMD_CAM_TOGGLE "CAM_TOGGLE"
 
+// Mode persistence settings
+#define PREFS_NAMESPACE "rocketESP32"
+#define PREFS_MODE_KEY "lastMode"
+
 // System states
 enum SystemMode {
   MODE_SLEEP,

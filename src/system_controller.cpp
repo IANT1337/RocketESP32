@@ -121,8 +121,13 @@ void SystemController::initialize() {
   yield(); // Feed watchdog
   delay(100); // Small delay
   
-  // Start in sleep mode
-  setMode(MODE_SLEEP);
+  // Load and restore the persistent mode from previous session
+  SystemMode savedMode = loadPersistentMode();
+  Serial.print("Restoring to saved mode: ");
+  Serial.println(savedMode);
+  
+  // Set system to the restored mode
+  setMode(savedMode);
   
   // Create and start background task
   backgroundTaskRunning = true;
@@ -278,7 +283,7 @@ void SystemController::updateModeTransition() {
       
     case TRANSITION_RADIO_CONFIG:
       // Configure radio power based on mode
-      if (pendingMode == MODE_FLIGHT) {
+      if (pendingMode == MODE_FLIGHT || pendingMode == MODE_MAINTENANCE || pendingMode == MODE_SLEEP ) {
         radioModule.setHighPower();
       } else {
         radioModule.setLowPower();
@@ -327,6 +332,9 @@ void SystemController::completeModeTransition() {
   // Transition complete
   currentMode = pendingMode;
   transitionState = TRANSITION_IDLE;
+  
+  // Save the new mode to persistent storage
+  savePersistentMode(currentMode);
   
   Serial.print("Mode transition complete: ");
   Serial.println(currentMode);
@@ -382,8 +390,9 @@ void SystemController::updateSensors() {
   bool readPressure = false; 
   bool readPower = false;
   bool readIMU = false;
+  bool anyDataUpdated = false;
   
-  // Determine which sensors to read this cycle
+  // Determine which sensors to read this cycle based on their individual timers
   if (currentMode != MODE_SLEEP && (currentTime - lastGPSRead >= GPS_READ_INTERVAL)) {
     readGPS = true;
     lastGPSRead = currentTime;
@@ -399,6 +408,7 @@ void SystemController::updateSensors() {
     lastPowerRead = currentTime;
   }
   
+  // IMU should be read at high frequency when not in sleep mode
   if (currentMode != MODE_SLEEP) {
     readIMU = true; // Always read IMU at high frequency when not sleeping
   }
@@ -432,19 +442,21 @@ void SystemController::updateSensors() {
   
   // Quick mutex lock to update telemetry data
   if (xSemaphoreTake(telemetryMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-    // Update GPS data (only when read)
+    // Update GPS data (only when read and valid)
     if (readGPS && gpsValid) {
       telemetryData.latitude = lat;
       telemetryData.longitude = lon;
       telemetryData.altitude_gps = altGps;
       telemetryData.gps_valid = true;
+      anyDataUpdated = true;
     }
     
-    // Update pressure data (only when read)
+    // Update pressure data (only when read and valid)
     if (readPressure && pressureValid) {
       telemetryData.pressure = pressure;
       telemetryData.altitude_pressure = altPressure;
       telemetryData.pressure_valid = true;
+      anyDataUpdated = true;
     }
     
     // Update IMU data (high frequency)
@@ -460,19 +472,31 @@ void SystemController::updateSensors() {
       telemetryData.mag_z = imuData.mag_z;
       telemetryData.imu_temperature = imuData.temperature;
       telemetryData.imu_valid = true;
+      anyDataUpdated = true;
     }
     
-    // Update power data (only when read)
+    // Update power data (only when read and valid)
     if (readPower && powerValid && powerData.valid) {
       telemetryData.bus_voltage = powerData.voltage;
       telemetryData.current = powerData.current * -1.66;
       telemetryData.power = powerData.power * 1.66;
       telemetryData.power_valid = true;
+      anyDataUpdated = true;
     }
     
-    // Always update timestamp and mode
-    telemetryData.timestamp = millis();
-    telemetryData.mode = currentMode;
+    // Always update timestamp and mode when any data is updated
+    if (anyDataUpdated) {
+      telemetryData.timestamp = millis();
+      telemetryData.mode = currentMode;
+      
+      // Log to SD card immediately when any new sensor data is available
+      if (sdManager.isInitialized()) {
+        unsigned long sdStart = micros();
+        sdManager.addData(telemetryData);
+        unsigned long sdTime = micros() - sdStart;
+        updatePerformanceMetrics(sdTime, &perfMetrics.sdWriteTime, &perfMetrics.maxSdWriteTime);
+      }
+    }
     
     xSemaphoreGive(telemetryMutex);
     
@@ -480,11 +504,21 @@ void SystemController::updateSensors() {
     unsigned long sensorTime = micros() - sensorStart;
     updatePerformanceMetrics(sensorTime, &perfMetrics.sensorReadTime, &perfMetrics.maxSensorReadTime);
     
-    // Debug output for multi-rate sensor reading
-    if (sensorTime > 5000) { // Only log if > 5ms
-      Serial.printf("Sensor read: %lu μs (GPS:%d, Press:%d, Pwr:%d, IMU:%d)\n", 
-                    sensorTime, readGPS, readPressure, readPower, readIMU);
-    }
+    // Debug output for sensor reading rates
+    //if (anyDataUpdated) {
+      //Serial.print("Sensors: GPS:");
+      //Serial.print(readGPS ? (gpsValid ? "V" : "I") : "-");
+      //Serial.print(" P:");
+      //Serial.print(readPressure ? (pressureValid ? "V" : "I") : "-");
+      //Serial.print(" IMU:");
+      //Serial.print(readIMU ? (imuValid ? "V" : "I") : "-");
+      //Serial.print(" PWR:");
+      //Serial.print(readPower ? (powerValid ? "V" : "I") : "-");
+      //Serial.print(" Mode:");
+      //Serial.print(currentMode);
+      //Serial.print(" t:");
+      //Serial.println(currentTime);
+    //}
   } else {
     Serial.println("Warning: Failed to acquire telemetry mutex in updateSensors");
   }
@@ -544,15 +578,15 @@ void SystemController::updatePerformanceMetrics(unsigned long duration, unsigned
   }
   
   // Log warnings for excessive durations
-  if (duration > 5000) { // > 5ms warning threshold
-    if (metric == &perfMetrics.sensorReadTime) {
-      logPerformanceWarning("sensor read", duration);
-    } else if (metric == &perfMetrics.radioTxTime) {
-      logPerformanceWarning("radio transmission", duration);
-    } else if (metric == &perfMetrics.sdWriteTime) {
-      logPerformanceWarning("SD write", duration);
-    }
-  }
+  //if (duration > 5000) { // > 5ms warning threshold
+  //  if (metric == &perfMetrics.sensorReadTime) {
+  //    logPerformanceWarning("sensor read", duration);
+  //  } else if (metric == &perfMetrics.radioTxTime) {
+  //    logPerformanceWarning("radio transmission", duration);
+  //  } else if (metric == &perfMetrics.sdWriteTime) {
+  //    logPerformanceWarning("SD write", duration);
+  //  }
+  //}
 }
 
 void SystemController::logPerformanceWarning(const char* operation, unsigned long duration) {
@@ -583,13 +617,7 @@ void SystemController::sendTelemetry() {
   // Update last transmission time
   lastRadioTx = currentTime;
   
-  // Store data to SD card if available with performance monitoring
-  if (sdManager.isInitialized()) {
-    unsigned long sdStart = micros();
-    sdManager.addData(telemetryCopy);
-    unsigned long sdTime = micros() - sdStart;
-    updatePerformanceMetrics(sdTime, &perfMetrics.sdWriteTime, &perfMetrics.maxSdWriteTime);
-  }
+  // Note: SD card logging is now handled in updateSensors() for higher frequency logging
 }
 
 bool SystemController::isSDCardAvailable() const {
@@ -701,18 +729,49 @@ void SystemController::runSensorTasks() {
     // Use the consolidated updateSensors method
     updateSensors();
     
-    // Adjust task frequency based on mode
-    if (currentMode != MODE_SLEEP) {
-      // High frequency in flight/maintenance mode (40Hz)
-      vTaskDelay(pdMS_TO_TICKS(25));
-    } else {
-      // Lower frequency in sleep mode (1Hz) for power saving
-      vTaskDelay(pdMS_TO_TICKS(1000));
-    }
+    // Run sensor task at high frequency (40Hz = 25ms) to capture IMU data
+    // Individual sensors will be read at their own rates within updateSensors()
+    vTaskDelay(pdMS_TO_TICKS(25)); // 40Hz for high-speed IMU logging
   }
   
   Serial.println("Sensor task stopping");
   // Notify main task that we're shutting down
   xTaskNotify(mainTaskHandle, 2, eSetValueWithOverwrite);
   vTaskDelete(NULL);
+}
+
+void SystemController::savePersistentMode(SystemMode mode) {
+  if (preferences.begin(PREFS_NAMESPACE, false)) {  // false = read/write mode
+    size_t bytesWritten = preferences.putUChar(PREFS_MODE_KEY, (uint8_t)mode);
+    preferences.end();
+    
+    if (bytesWritten > 0) {
+      Serial.print("Saved persistent mode: ");
+      Serial.println(mode);
+    } else {
+      Serial.println("Warning: Failed to save persistent mode");
+    }
+  } else {
+    Serial.println("Error: Could not open preferences for writing mode");
+  }
+}
+
+SystemMode SystemController::loadPersistentMode() {
+  SystemMode savedMode = MODE_SLEEP;  // Default to sleep mode if no saved mode
+  
+  if (preferences.begin(PREFS_NAMESPACE, true)) {  // true = read-only mode
+    if (preferences.isKey(PREFS_MODE_KEY)) {
+      uint8_t modeValue = preferences.getUChar(PREFS_MODE_KEY, (uint8_t)MODE_SLEEP);
+      savedMode = (SystemMode)modeValue;
+      Serial.print("Loaded persistent mode: ");
+      Serial.println(savedMode);
+    } else {
+      Serial.println("No persistent mode found, defaulting to SLEEP");
+    }
+    preferences.end();
+  } else {
+    Serial.println("Error: Could not open preferences for reading mode");
+  }
+  
+  return savedMode;
 }
