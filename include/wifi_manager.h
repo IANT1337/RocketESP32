@@ -25,6 +25,9 @@ private:
   void handleNotFound();
   void handleStyle();
   void handleScript();
+  void handleLogsList();
+  void handleDownloadFile();
+  void handleDownloadAll();
   String createTelemetryJSON(const TelemetryData& data);
 
 public:

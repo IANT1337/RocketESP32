@@ -72,6 +72,12 @@ public:
   String getCurrentLogFile() const { return currentLogFile; }
   int getTotalBatchesStored() const { return totalBatchesStored; }
   
+  // Web download support methods
+  String getLogFilesList();  // Returns JSON list of log files with metadata
+  bool readLogFile(const String& filename, String& content);  // Read entire file content
+  bool fileExists(const String& filename);  // Check if file exists
+  size_t getFileSize(const String& filename);  // Get file size in bytes
+  
   // Statistics
   size_t getAvailableSpace() const;
   size_t getUsedSpace() const;

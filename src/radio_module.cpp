@@ -16,39 +16,17 @@ void RadioModule::initialize() {
   radioSerial->begin(RADIO_BAUD_RATE, SERIAL_8N1, RADIO_SERIAL_RX_PIN, RADIO_SERIAL_TX_PIN);
   
   // Brief delay for serial to stabilize
-  delay(500);
+  delay(100);
   
   // Clear any existing data in the buffer
   while (radioSerial->available()) {
     radioSerial->read();
   }
-  
-  // Try to enter AT command mode with shorter timeout
-  sendATCommand("+++", false); // Send without terminator
-  delay(1100); // AT command mode requires > 1 second guard time
-  
-  // Test communication with shorter timeout
-  sendATCommand("ATI");
-  delay(5);
-  String response = readATResponse(1000); // Reduced from 2000ms
-  
-  if (response.indexOf("RFD900") >= 0 || response.indexOf("OK") >= 0) {
-    initialized = true;
-    Serial.println("Radio module initialized successfully");
-    
-    // Set default to low power mode
-    setLowPower();
-  } else {
-    // Even if AT commands fail, mark as initialized for basic communication
+      // Even if AT commands fail, mark as initialized for basic communication
     // This prevents system lockup if radio is in transparent mode
     initialized = true;
-    Serial.println("Radio module initialized (transparent mode)");
-    Serial.print("AT Response: ");
-    Serial.println(response);
-  }
-  
+    Serial.println("Radio module initialized (transparent mode)");  
   // Try to exit AT command mode
-  sendATCommand("ATO");
   delay(100);
 }
 

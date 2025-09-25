@@ -284,9 +284,9 @@ void SystemController::updateModeTransition() {
     case TRANSITION_RADIO_CONFIG:
       // Configure radio power based on mode
       if (pendingMode == MODE_FLIGHT || pendingMode == MODE_MAINTENANCE || pendingMode == MODE_SLEEP ) {
-        radioModule.setHighPower();
+        //radioModule.setHighPower();
       } else {
-        radioModule.setLowPower();
+        //radioModule.setLowPower();
       }
       transitionState = TRANSITION_WIFI_CONFIG;
       transitionStartTime = currentTime;
@@ -376,6 +376,34 @@ void SystemController::handleSleepMode() {
   // Power management is handled in mode transitions
 }
 
+void SystemController::checkAccelerationThreshold() {
+  // Only check acceleration in non-flight modes
+  if (currentMode == MODE_FLIGHT) {
+    return; // Already in flight mode, no need to check
+  }
+  
+  // Get a thread-safe copy of current telemetry data
+  TelemetryData telemetryCopy = getTelemetryDataCopy();
+  
+  // Only proceed if IMU data is valid
+  if (!telemetryCopy.imu_valid) {
+    return; // No valid IMU data to check
+  }
+  
+  // Calculate total acceleration magnitude (vector magnitude)
+  float totalAccel = sqrt(telemetryCopy.accel_x * telemetryCopy.accel_x + 
+                         telemetryCopy.accel_y * telemetryCopy.accel_y + 
+                         telemetryCopy.accel_z * telemetryCopy.accel_z);
+  
+  // Check if acceleration exceeds 2G threshold
+  if (totalAccel >= FLIGHT_MODE_ACCEL_THRESHOLD) {
+    Serial.print("High acceleration detected: ");
+    Serial.print(totalAccel);
+    Serial.println("g - Automatically switching to FLIGHT mode!");
+    setMode(MODE_FLIGHT);
+  }
+}
+
 void SystemController::updateSensors() {
   unsigned long currentTime = millis();
   unsigned long sensorStart = micros();
@@ -408,9 +436,16 @@ void SystemController::updateSensors() {
     lastPowerRead = currentTime;
   }
   
-  // IMU should be read at high frequency when not in sleep mode
+  // IMU should be read for acceleration detection in all modes
+  // In sleep mode, read at lower frequency; in active modes, read at high frequency
   if (currentMode != MODE_SLEEP) {
     readIMU = true; // Always read IMU at high frequency when not sleeping
+  } else {
+    // In sleep mode, read IMU at lower frequency for acceleration detection
+    if (currentTime - lastSensorRead >= 100) { // 10Hz in sleep mode vs 40Hz in active modes
+      readIMU = true;
+      lastSensorRead = currentTime;
+    }
   }
   
   // Pre-read sensor data outside of mutex to minimize lock time
@@ -499,6 +534,12 @@ void SystemController::updateSensors() {
     }
     
     xSemaphoreGive(telemetryMutex);
+    
+    // Check acceleration threshold for automatic flight mode activation
+    // (Only check when IMU data was updated and is valid)
+    if (readIMU && imuValid) {
+      checkAccelerationThreshold();
+    }
     
     // Update performance metrics
     unsigned long sensorTime = micros() - sensorStart;
@@ -774,4 +815,20 @@ SystemMode SystemController::loadPersistentMode() {
   }
   
   return savedMode;
+}
+
+String SystemController::getLogFilesList() {
+  return sdManager.getLogFilesList();
+}
+
+bool SystemController::downloadLogFile(const String& filename, String& content) {
+  return sdManager.readLogFile(filename, content);
+}
+
+bool SystemController::logFileExists(const String& filename) {
+  return sdManager.fileExists(filename);
+}
+
+size_t SystemController::getLogFileSize(const String& filename) {
+  return sdManager.getFileSize(filename);
 }

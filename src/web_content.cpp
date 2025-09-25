@@ -42,6 +42,15 @@ const char WebContent::index_html[] PROGMEM = R"HTML(
                 <p>RSSI: <span id="rssi" class="data-value">--</span></p>
                 <p>Signal Quality: <span id="signal_quality" class="data-value">--</span></p>
             </div>
+            
+            <div class="data-card flight-logs-card">
+                <h3>Flight Logs</h3>
+                <button class="download-btn" onclick="refreshLogsList()">Refresh Logs</button>
+                <button class="download-btn download-all-btn" onclick="downloadAllLogs()">Download All</button>
+                <div id="logs-list" class="logs-container">
+                    <p class="logs-status">Click "Refresh Logs" to view available files</p>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -80,6 +89,10 @@ body {
     background-color: #fafafa;
 }
 
+.flight-logs-card {
+    grid-column: 1 / -1;  /* Span full width */
+}
+
 .data-card h3 {
     margin-top: 0;
     color: #333;
@@ -91,7 +104,7 @@ body {
     color: #2196F3;
 }
 
-.refresh-btn {
+.refresh-btn, .download-btn {
     background: #4CAF50;
     color: white;
     padding: 10px 20px;
@@ -100,10 +113,80 @@ body {
     cursor: pointer;
     font-size: 16px;
     transition: background-color 0.3s;
+    margin-right: 10px;
+    margin-bottom: 10px;
 }
 
-.refresh-btn:hover {
+.download-all-btn {
+    background: #2196F3;
+}
+
+.refresh-btn:hover, .download-btn:hover {
     background: #45a049;
+}
+
+.download-all-btn:hover {
+    background: #1976D2;
+}
+
+.logs-container {
+    margin-top: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 10px;
+    background: white;
+}
+
+.log-file {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.log-file:last-child {
+    border-bottom: none;
+}
+
+.log-info {
+    flex-grow: 1;
+}
+
+.log-name {
+    font-weight: bold;
+    color: #333;
+}
+
+.log-size {
+    font-size: 0.9em;
+    color: #666;
+}
+
+.log-download {
+    background: #2196F3;
+    color: white;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.log-download:hover {
+    background: #1976D2;
+}
+
+.logs-status {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+}
+
+.logs-status.error {
+    color: #d32f2f;
 }
 
 @media (max-width: 600px) {
@@ -134,6 +217,56 @@ function refreshData() {
             console.error('Error:', error);
             document.getElementById('timestamp').textContent = 'Connection Error';
         });
+}
+
+function refreshLogsList() {
+    fetch('/logs')
+        .then(response => response.json())
+        .then(data => {
+            const logsContainer = document.getElementById('logs-list');
+            
+            if (data.error) {
+                logsContainer.innerHTML = '<p class="logs-status error">' + data.error + '</p>';
+                return;
+            }
+            
+            if (!data.files || data.files.length === 0) {
+                logsContainer.innerHTML = '<p class="logs-status">No log files found</p>';
+                return;
+            }
+            
+            let html = '';
+            data.files.forEach(file => {
+                const sizeKB = (file.size / 1024).toFixed(1);
+                html += '<div class="log-file">';
+                html += '<div class="log-info">';
+                html += '<div class="log-name">' + file.name + '</div>';
+                html += '<div class="log-size">' + sizeKB + ' KB</div>';
+                html += '</div>';
+                html += '<button class="log-download" onclick="downloadFile(\'' + file.name + '\')">Download</button>';
+                html += '</div>';
+            });
+            
+            if (data.active_card) {
+                html += '<p style="margin-top: 15px; font-size: 0.9em; color: #666;">Active card: ' + data.active_card + '</p>';
+            }
+            
+            logsContainer.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('logs-list').innerHTML = '<p class="logs-status error">Failed to load logs</p>';
+        });
+}
+
+function downloadFile(filename) {
+    const url = '/download?file=' + encodeURIComponent(filename);
+    window.open(url, '_blank');
+}
+
+function downloadAllLogs() {
+    const url = '/download/all';
+    window.open(url, '_blank');
 }
 
 function getModeString(mode) {

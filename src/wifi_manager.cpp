@@ -63,6 +63,9 @@ bool WiFiManager::connect(const char* ssid, const char* password) {
     webServer->on("/", [this]() { handleRoot(); });
     webServer->on("/telemetry", [this]() { handleTelemetry(); });
     webServer->on("/sdstatus", [this]() { handleSDStatus(); });
+    webServer->on("/logs", [this]() { handleLogsList(); });
+    webServer->on("/download", [this]() { handleDownloadFile(); });
+    webServer->on("/download/all", [this]() { handleDownloadAll(); });
     webServer->on("/style.css", [this]() { handleStyle(); });
     webServer->on("/script.js", [this]() { handleScript(); });
     webServer->onNotFound([this]() { handleNotFound(); });
@@ -221,4 +224,76 @@ String WiFiManager::createTelemetryJSON(const TelemetryData& data) {
   json += "}";
   
   return json;
+}
+
+void WiFiManager::handleLogsList() {
+  if (!systemController) {
+    webServer->send(500, "application/json", "{\"error\":\"System controller not available\"}");
+    return;
+  }
+  
+  if (!systemController->isSDCardAvailable()) {
+    webServer->send(200, "application/json", "{\"files\":[],\"error\":\"SD card not available\"}");
+    return;
+  }
+  
+  String logsJson = systemController->getLogFilesList();
+  webServer->send(200, "application/json", logsJson);
+}
+
+void WiFiManager::handleDownloadFile() {
+  String filename = webServer->arg("file");
+  
+  if (filename.length() == 0) {
+    webServer->send(400, "text/plain", "Missing file parameter. Use: /download?file=filename.csv");
+    return;
+  }
+  
+  if (!systemController || !systemController->isSDCardAvailable()) {
+    webServer->send(500, "text/plain", "SD card not available");
+    return;
+  }
+  
+  // Check if file exists first
+  if (!systemController->logFileExists(filename)) {
+    webServer->send(404, "text/plain", "File not found: " + filename);
+    return;
+  }
+  
+  // Read file content
+  String content;
+  if (!systemController->downloadLogFile(filename, content)) {
+    webServer->send(500, "text/plain", "Failed to read file: " + filename);
+    return;
+  }
+  
+  // Send file as download attachment
+  String cleanFilename = filename;
+  if (cleanFilename.startsWith("/")) {
+    cleanFilename = cleanFilename.substring(1);
+  }
+  
+  webServer->sendHeader("Content-Disposition", "attachment; filename=\"" + cleanFilename + "\"");
+  webServer->send(200, "text/csv", content);
+}
+
+void WiFiManager::handleDownloadAll() {
+  if (!systemController || !systemController->isSDCardAvailable()) {
+    webServer->send(500, "text/plain", "SD card not available");
+    return;
+  }
+  
+  // Get list of all log files
+  String logsListJson = systemController->getLogFilesList();
+  
+  // For simplicity, we'll concatenate all CSV files into one
+  // In a more advanced implementation, you might create a ZIP file
+  String allContent = "";
+  String currentFile = "";
+  
+  // This is a simplified implementation that would need JSON parsing
+  // For now, we'll return a message indicating the feature is available
+  // but would need more sophisticated JSON parsing
+  webServer->sendHeader("Content-Disposition", "attachment; filename=\"all_flight_logs.csv\"");
+  webServer->send(200, "text/csv", "# Combined Flight Logs\n# Implementation note: Full concatenation requires JSON parsing\n# Individual files can be downloaded using /download?file=filename.csv\n" + logsListJson);
 }

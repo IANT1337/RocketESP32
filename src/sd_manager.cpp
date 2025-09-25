@@ -681,3 +681,91 @@ bool SDManager::retryCardInitialization() {
   // Try to initialize the SD system again
   return initializeSD();
 }
+
+String SDManager::getLogFilesList() {
+  String json = "{\"files\":[";
+  bool firstFile = true;
+  
+  if (!sdInitialized || activeCard == SD_NONE) {
+    json += "],\"error\":\"SD card not available\"}";
+    return json;
+  }
+  
+  File root = SD.open("/");
+  if (!root) {
+    json += "],\"error\":\"Failed to open root directory\"}";
+    return json;
+  }
+  
+  File file = root.openNextFile();
+  while (file) {
+    if (!file.isDirectory() && String(file.name()).endsWith(".csv")) {
+      if (!firstFile) {
+        json += ",";
+      }
+      json += "{";
+      json += "\"name\":\"" + String(file.name()) + "\",";
+      json += "\"size\":" + String(file.size());
+      json += "}";
+      firstFile = false;
+    }
+    file.close();
+    file = root.openNextFile();
+  }
+  
+  root.close();
+  json += "],\"active_card\":\"" + getCardSlotName(activeCard) + "\"}";
+  return json;
+}
+
+bool SDManager::readLogFile(const String& filename, String& content) {
+  if (!sdInitialized || activeCard == SD_NONE) {
+    return false;
+  }
+  
+  // Ensure filename starts with "/"
+  String fullPath = filename.startsWith("/") ? filename : "/" + filename;
+  
+  File file = SD.open(fullPath, FILE_READ);
+  if (!file) {
+    Serial.println("Failed to open file: " + fullPath);
+    return false;
+  }
+  
+  content = "";
+  while (file.available()) {
+    content += file.readString();
+  }
+  file.close();
+  
+  return true;
+}
+
+bool SDManager::fileExists(const String& filename) {
+  if (!sdInitialized || activeCard == SD_NONE) {
+    return false;
+  }
+  
+  // Ensure filename starts with "/"
+  String fullPath = filename.startsWith("/") ? filename : "/" + filename;
+  
+  return SD.exists(fullPath);
+}
+
+size_t SDManager::getFileSize(const String& filename) {
+  if (!sdInitialized || activeCard == SD_NONE) {
+    return 0;
+  }
+  
+  // Ensure filename starts with "/"
+  String fullPath = filename.startsWith("/") ? filename : "/" + filename;
+  
+  File file = SD.open(fullPath, FILE_READ);
+  if (!file) {
+    return 0;
+  }
+  
+  size_t size = file.size();
+  file.close();
+  return size;
+}

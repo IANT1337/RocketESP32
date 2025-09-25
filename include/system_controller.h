@@ -90,6 +90,7 @@ private:
   void handleMaintenanceMode();
   void handleFlightMode();
   void handleSleepMode();
+  void checkAccelerationThreshold(); // Check for 2G acceleration and auto-switch to flight mode
   
   // Mode persistence functions
   void savePersistentMode(SystemMode mode);
@@ -126,6 +127,12 @@ public:
   void listSDCardFiles();
   String getSDCardStatus() const;
   String getDetailedSDCardStatus() const;
+  
+  // Web download support methods
+  String getLogFilesList();
+  bool downloadLogFile(const String& filename, String& content);
+  bool logFileExists(const String& filename);
+  size_t getLogFileSize(const String& filename);
   
   // Thread-safe telemetry access
   TelemetryData getTelemetryDataCopy() const;

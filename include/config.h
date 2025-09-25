@@ -79,6 +79,9 @@
 #define PREFS_NAMESPACE "rocketESP32"
 #define PREFS_MODE_KEY "lastMode"
 
+// Flight mode acceleration threshold (in g)
+#define FLIGHT_MODE_ACCEL_THRESHOLD 2.0  // 2G threshold for automatic flight mode activation
+
 // System states
 enum SystemMode {
   MODE_SLEEP,
